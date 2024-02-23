@@ -113,6 +113,11 @@ int D3DApp::Run()
 
 bool D3DApp::Init()
 {
+    // smz: 在debug模式检查显示适配器和显示设备
+#if defined(DEBUG) | defined(_DEBUG)
+    EnumAllAdapters();
+#endif
+    
     if (!InitMainWindow())
         return false;
 
@@ -318,6 +323,13 @@ LRESULT D3DApp::MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
     case WM_MOUSEMOVE:
         return 0;
+    // smz: 用空格控制全屏和窗口切换
+    case WM_KEYDOWN:
+        if (wParam == VK_SPACE)
+        {
+            this->SwitchFullScreen();
+        }
+        return 0;
     }
 
     return DefWindowProc(hwnd, msg, wParam, lParam);
@@ -441,6 +453,16 @@ bool D3DApp::InitDirect3D()
     HR(dxgiDevice->GetAdapter(dxgiAdapter.GetAddressOf()));
     HR(dxgiAdapter->GetParent(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(dxgiFactory1.GetAddressOf())));
 
+    // smz: 报告一下默认使用的显示适配器是哪一个，同时报告它在向什么设备输出
+#if defined(DEBUG) || defined(_DEBUG)  
+    if (dxgiAdapter != nullptr)
+    {
+        OutputDebugString(L"Current Adapter: ");
+        this->PrintAdapter(0, dxgiAdapter.Get());
+        this->EnumAllOutputs(dxgiAdapter.Get());
+    }
+#endif
+
     // 查看该对象是否包含IDXGIFactory2接口
     hr = dxgiFactory1.As(&dxgiFactory2);
     // 如果包含，则说明支持D3D11.1
@@ -515,7 +537,7 @@ bool D3DApp::InitDirect3D()
     
 
     // 可以禁止alt+enter全屏
-    dxgiFactory1->MakeWindowAssociation(m_hMainWnd, DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_WINDOW_CHANGES);
+    // dxgiFactory1->MakeWindowAssociation(m_hMainWnd, DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_WINDOW_CHANGES);
 
     // 设置调试对象名
     D3D11SetDebugObjectName(m_pd3dImmediateContext.Get(), "ImmediateContext");
@@ -526,6 +548,94 @@ bool D3DApp::InitDirect3D()
     OnResize();
 
     return true;
+}
+
+void D3DApp::EnumAllAdapters()
+{
+    OutputDebugString(L"Enuming all adapters : \n");
+    ComPtr<IDXGIFactory> m_pdxgiFactoryBase = nullptr;
+    HR(CreateDXGIFactory(__uuidof(IDXGIFactory), reinterpret_cast<void**>(m_pdxgiFactoryBase.GetAddressOf())));
+
+    ComPtr<IDXGIAdapter> m_pdxgiAdapterBase = nullptr;
+    for (UINT i = 0;
+        m_pdxgiFactoryBase->EnumAdapters(i, m_pdxgiAdapterBase.GetAddressOf()) != DXGI_ERROR_NOT_FOUND;
+        ++i)
+    {
+        this->PrintAdapter(i, m_pdxgiAdapterBase.Get());
+    }
+}
+
+void D3DApp::PrintAdapter(UINT num, IDXGIAdapter* adapter)
+{
+    DXGI_ADAPTER_DESC desc = { };
+    HR(adapter->GetDesc(&desc));
+    wchar_t enumStr[256];
+    wsprintf(enumStr, L"adapter no.%d: %s\n", num, desc.Description);
+    OutputDebugString(enumStr);
+}
+
+void D3DApp::EnumAllOutputs(IDXGIAdapter* adapter)
+{
+    OutputDebugString(L"Using ");
+    this->PrintAdapter(0, adapter);
+    OutputDebugString(L"Enuming all outputs : \n");
+    ComPtr<IDXGIOutput> m_pdxgiOutputBase = nullptr;
+    for (UINT i = 0;
+        adapter->EnumOutputs(i, m_pdxgiOutputBase.GetAddressOf()) != DXGI_ERROR_NOT_FOUND;
+        ++i)
+    {
+        this->PrintOutput(i, m_pdxgiOutputBase.Get());
+    }
+}
+
+void D3DApp::PrintOutput(UINT num, IDXGIOutput* output)
+{
+    DXGI_OUTPUT_DESC desc = { };
+    HR(output->GetDesc(&desc));
+    wchar_t enumStr[256];
+    wsprintf(enumStr, L"output no.%d: %s\n", num, desc.DeviceName);
+    OutputDebugString(enumStr);
+
+    UINT numModes = 0;
+    DXGI_MODE_DESC* displayModes = nullptr;
+    // smz: 这里第一次调用，只获得数量，不拿数组
+    HR(output->GetDisplayModeList(DXGI_FORMAT_R8G8B8A8_UNORM, 0, &numModes, nullptr));
+    // smz: 我们需要知道数组指针的管理范围有多大，否则无法delete，导致内存泄露
+    displayModes = new DXGI_MODE_DESC[numModes];
+    // smz: 第二次再把内容填入开辟好的内存中
+    HR(output->GetDisplayModeList(DXGI_FORMAT_R8G8B8A8_UNORM, 0, &numModes, displayModes));
+
+    wchar_t enumStr1[256];
+    wsprintf(enumStr1, L"Enumming display modes:\nTotal %d modes\n", numModes);
+    OutputDebugString(enumStr1);
+
+    for (UINT i = 0; i < numModes; i++)
+    {
+        wchar_t enumStr2[256];
+        wsprintf(enumStr2, L"Width: %u, Height: %u, Refresh Rate: %u, Format: %u\n",
+            displayModes[i].Width,
+            displayModes[i].Height,
+            displayModes[i].RefreshRate.Numerator/displayModes[i].RefreshRate.Denominator,
+            static_cast<UINT>(displayModes[i].Format));
+        OutputDebugString(enumStr2);
+    }
+
+    delete[] displayModes;
+}
+
+void D3DApp::SwitchFullScreen()
+{
+    BOOL fullScreenSwitch = false;
+
+    if (m_pSwapChain != nullptr)
+    {
+        m_pSwapChain->GetFullscreenState(&fullScreenSwitch, nullptr);
+        if (!fullScreenSwitch)
+        {
+            m_pSwapChain->SetFullscreenState(true, nullptr);
+        }
+        else m_pSwapChain->SetFullscreenState(false, nullptr);
+    }
 }
 
 void D3DApp::CalculateFrameStats()

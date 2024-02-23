@@ -28,8 +28,14 @@ public:
     virtual LRESULT MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
     // 窗口的消息回调函数
 protected:
-    bool InitMainWindow();      // 窗口初始化
-    bool InitDirect3D();        // Direct3D初始化
+    bool InitMainWindow();                                 // 窗口初始化
+    bool InitDirect3D();                                   // Direct3D初始化    
+    void EnumAllAdapters();                                // smz: 枚举所有显示适配器并输出
+    void PrintAdapter(UINT num, IDXGIAdapter* adapter);    // smz: 打印单个显示适配器信息
+    void EnumAllOutputs(IDXGIAdapter* adapter);            // smz: 枚举所有显示输出设备并输出
+    void PrintOutput(UINT num, IDXGIOutput* output);       // smz: 打印单个显示输出设备信息
+
+    void SwitchFullScreen();                               // smz: 设置全屏属性
 
     void CalculateFrameStats(); // 计算每秒帧数并在窗口显示
 
