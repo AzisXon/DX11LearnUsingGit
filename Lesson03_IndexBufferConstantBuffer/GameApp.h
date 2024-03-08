@@ -27,6 +27,7 @@ public:
     bool Init();
     void OnResize();
     void UpdateScene(float dt);
+    void UpdateSceneII(float dt);      // smz: 在一次DrawScene的中途再次修改常量缓冲区
     void DrawScene();
 
 

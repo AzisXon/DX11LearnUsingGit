@@ -41,7 +41,20 @@ void GameApp::UpdateScene(float dt)
     
     static float phi = 0.0f, theta = 0.0f;
     phi += 0.3f * dt, theta += 0.37f * dt;
-    m_CBuffer.world = XMMatrixTranspose(XMMatrixRotationX(phi) * XMMatrixRotationY(theta));
+    m_CBuffer.world = XMMatrixTranspose(XMMatrixRotationX(phi) * XMMatrixRotationY(theta) * XMMatrixTranslation(-2.0, 0, 0));
+    // 更新常量缓冲区，让立方体转起来
+    D3D11_MAPPED_SUBRESOURCE mappedData;
+    HR(m_pd3dImmediateContext->Map(m_pConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
+    memcpy_s(mappedData.pData, sizeof(m_CBuffer), &m_CBuffer, sizeof(m_CBuffer));
+    m_pd3dImmediateContext->Unmap(m_pConstantBuffer.Get(), 0);
+}
+
+// smz: 在一次绘制中途再次修改物体位置
+void GameApp::UpdateSceneII(float dt)
+{
+    static float phiTwo = 0.0f, thetaTwo = 0.0f;
+    phiTwo += 0.3f * dt, thetaTwo += 0.37f * dt;
+    m_CBuffer.world = XMMatrixTranspose(XMMatrixRotationX(phiTwo) * XMMatrixRotationY(thetaTwo) * XMMatrixTranslation(2.0, 0, 0));
     // 更新常量缓冲区，让立方体转起来
     D3D11_MAPPED_SUBRESOURCE mappedData;
     HR(m_pd3dImmediateContext->Map(m_pConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
@@ -58,8 +71,13 @@ void GameApp::DrawScene()
     m_pd3dImmediateContext->ClearRenderTargetView(m_pRenderTargetView.Get(), reinterpret_cast<const float*>(&black));
     m_pd3dImmediateContext->ClearDepthStencilView(m_pDepthStencilView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-    // 绘制立方体
-    m_pd3dImmediateContext->DrawIndexed(36, 0, 0);
+    // smz：绘制四棱锥
+    m_pd3dImmediateContext->DrawIndexed(18, 0, 0);
+    // smz：修改常量缓冲区，以修改立方体位置
+    UpdateSceneII(m_Timer.DeltaTime());
+    // smz: 绘制立方体
+    m_pd3dImmediateContext->DrawIndexed(36, 18, 0);
+
     HR(m_pSwapChain->Present(0, 0));
 }
 
@@ -93,8 +111,27 @@ bool GameApp::InitResource()
     //   | /     | /
     //   |/______|/
     //  0       3
+    //VertexPosColor vertices[] =
+    //{
+    //    { XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f) },
+    //    { XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f) },
+    //    { XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f) },
+    //    { XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) },
+    //    { XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f) },
+    //    { XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 1.0f, 1.0f) },
+    //    { XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f) },
+    //    { XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 1.0f, 1.0f) }
+    //};
+    
+    // smz: 设置四棱锥和立方体顶点
     VertexPosColor vertices[] =
     {
+        { XMFLOAT3(0.0f, -2.4f, 0.0f), XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f) },
+        { XMFLOAT3(-1.0f, 0.0f, -1.0f), XMFLOAT4(1.0f, 0.6f, 0.0f, 1.0f) },
+        { XMFLOAT3(1.0f, 0.0f, -1.0f), XMFLOAT4(1.0f, 0.2f, 0.0f, 1.0f) },
+        { XMFLOAT3(1.0f, 0.0f, 1.0f), XMFLOAT4(1.0f, 0.6f, 0.0f, 1.0f) },
+        { XMFLOAT3(-1.0f, 0.0f, 1.0f), XMFLOAT4(1.0f, 0.2f, 0.0f, 1.0f) },
+
         { XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f) },
         { XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f) },
         { XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f) },
@@ -120,26 +157,56 @@ bool GameApp::InitResource()
     // ******************
     // 索引数组
     //
+    //DWORD indices[] = {
+    //    // 正面
+    //    0, 1, 2,
+    //    2, 3, 0,
+    //    // 左面
+    //    4, 5, 1,
+    //    1, 0, 4,
+    //    // 顶面
+    //    1, 5, 6,
+    //    6, 2, 1,
+    //    // 背面
+    //    7, 6, 5,
+    //    5, 4, 7,
+    //    // 右面
+    //    3, 2, 6,
+    //    6, 7, 3,
+    //    // 底面
+    //    4, 0, 3,
+    //    3, 7, 4
+    //};
+    
+    // smz: 设置四棱锥索引
     DWORD indices[] = {
+        0,1,2,
+        0,2,3,
+        0,3,4,
+        0,4,1,
+        1,3,2,
+        1,4,3,
+
         // 正面
-        0, 1, 2,
-        2, 3, 0,
+        5, 6, 7,
+        7, 8, 5,
         // 左面
-        4, 5, 1,
-        1, 0, 4,
+        9, 10, 6,
+        6, 5, 9,
         // 顶面
-        1, 5, 6,
-        6, 2, 1,
+        6, 10, 11,
+        11, 7, 6,
         // 背面
-        7, 6, 5,
-        5, 4, 7,
+        12, 11, 10,
+        10, 9, 12,
         // 右面
-        3, 2, 6,
-        6, 7, 3,
+        8, 7, 11,
+        11, 12, 8,
         // 底面
-        4, 0, 3,
-        3, 7, 4
+        9, 5, 8,
+        8, 12, 9
     };
+
     // 设置索引缓冲区描述
     D3D11_BUFFER_DESC ibd;
     ZeroMemory(&ibd, sizeof(ibd));
