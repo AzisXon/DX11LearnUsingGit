@@ -62,6 +62,42 @@ void GameApp::UpdateSceneII(float dt)
     m_pd3dImmediateContext->Unmap(m_pConstantBuffer.Get(), 0);
 }
 
+// smz: 修改动态顶点缓冲区
+void GameApp::UpdateSceneIII(float dt)
+{
+    static float phiThree = 0.3f * dt;
+
+    for (UINT i = 0; i < 3; i++)
+    {
+        DirectX::XMVECTOR tempPosV = XMLoadFloat3(&(m_VBufferDyn[i].pos));
+        tempPosV = XMVector4Transform(tempPosV, XMMatrixRotationZ(phiThree));
+        XMStoreFloat3(&(m_VBufferDyn[i].pos), tempPosV);
+    }
+
+    D3D11_MAPPED_SUBRESOURCE mappedData;
+    HR(m_pd3dImmediateContext->Map(m_pVertexBufferDyn.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
+    memcpy_s(mappedData.pData, sizeof(m_VBufferDyn), &m_VBufferDyn, sizeof(m_VBufferDyn));
+    m_pd3dImmediateContext->Unmap(m_pVertexBufferDyn.Get(), 0);
+
+    UINT stride = sizeof(VertexPosColor);	
+    UINT offset = 0;						
+    m_pd3dImmediateContext->IASetVertexBuffers(0, 1, m_pVertexBufferDyn.GetAddressOf(), &stride, &offset);
+    m_pd3dImmediateContext->IASetIndexBuffer(m_pIndexBufferDyn.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+    m_CBuffer.world = XMMatrixIdentity();
+    HR(m_pd3dImmediateContext->Map(m_pConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
+    memcpy_s(mappedData.pData, sizeof(m_CBuffer), &m_CBuffer, sizeof(m_CBuffer));
+    m_pd3dImmediateContext->Unmap(m_pConstantBuffer.Get(), 0);
+}
+
+void GameApp::UpdateSceneIV(float dt)
+{
+    UINT stride = sizeof(VertexPosColor);
+    UINT offset = 0;
+    m_pd3dImmediateContext->IASetVertexBuffers(0, 1, m_pVertexBuffer.GetAddressOf(), &stride, &offset);
+    m_pd3dImmediateContext->IASetIndexBuffer(m_pIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+}
+
 void GameApp::DrawScene()
 {
     assert(m_pd3dImmediateContext);
@@ -77,6 +113,12 @@ void GameApp::DrawScene()
     UpdateSceneII(m_Timer.DeltaTime());
     // smz: 绘制立方体
     m_pd3dImmediateContext->DrawIndexed(36, 18, 0);
+    // smz: 修改动态顶点缓冲区
+    UpdateSceneIII(m_Timer.DeltaTime());
+    // smz: 绘制三角形
+    m_pd3dImmediateContext->DrawIndexed(3, 0, 0);
+    // smz: 恢复渲染状态
+    UpdateSceneIV(m_Timer.DeltaTime());
 
     HR(m_pSwapChain->Present(0, 0));
 }
@@ -154,6 +196,29 @@ bool GameApp::InitResource()
     InitData.pSysMem = vertices;
     HR(m_pd3dDevice->CreateBuffer(&vbd, &InitData, m_pVertexBuffer.GetAddressOf()));
 
+    // smz: 创建动态顶点缓冲区
+    VertexPosColor verticesDyn[] =
+    {
+        { XMFLOAT3(0.0f, 4.0f, 3.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f) },
+        { XMFLOAT3(3.4f, -2.0f, 3.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f) },
+        { XMFLOAT3(-3.4f, -2.0f, 3.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f) }
+    };
+
+    m_VBufferDyn[0] = verticesDyn[0];
+    m_VBufferDyn[1] = verticesDyn[1];
+    m_VBufferDyn[2] = verticesDyn[2];
+
+    D3D11_BUFFER_DESC vbdDyn;
+    ZeroMemory(&vbdDyn, sizeof(vbdDyn));
+    vbdDyn.Usage = D3D11_USAGE_DYNAMIC;
+    vbdDyn.ByteWidth = sizeof verticesDyn;
+    vbdDyn.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    vbdDyn.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    ZeroMemory(&InitData, sizeof(InitData));
+    InitData.pSysMem = verticesDyn;
+    HR(m_pd3dDevice->CreateBuffer(&vbdDyn, &InitData, m_pVertexBufferDyn.GetAddressOf()));
+
     // ******************
     // 索引数组
     //
@@ -217,6 +282,21 @@ bool GameApp::InitResource()
     // 新建索引缓冲区
     InitData.pSysMem = indices;
     HR(m_pd3dDevice->CreateBuffer(&ibd, &InitData, m_pIndexBuffer.GetAddressOf()));
+
+    // smz: 创建动态顶点的索引缓冲区
+    DWORD indicesDyn[] = {
+        0,1,2
+    };
+
+    ZeroMemory(&ibd, sizeof(ibd));
+    ibd.Usage = D3D11_USAGE_IMMUTABLE;
+    ibd.ByteWidth = sizeof indicesDyn;
+    ibd.BindFlags = D3D11_BIND_INDEX_BUFFER;
+    ibd.CPUAccessFlags = 0;
+
+    InitData.pSysMem = indicesDyn;
+    HR(m_pd3dDevice->CreateBuffer(&ibd, &InitData, m_pIndexBufferDyn.GetAddressOf()));
+
     // 输入装配阶段的索引缓冲区设置
     m_pd3dImmediateContext->IASetIndexBuffer(m_pIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 

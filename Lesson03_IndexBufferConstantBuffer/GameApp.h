@@ -28,6 +28,8 @@ public:
     void OnResize();
     void UpdateScene(float dt);
     void UpdateSceneII(float dt);      // smz: 在一次DrawScene的中途再次修改常量缓冲区
+    void UpdateSceneIII(float dt);     // smz: 在一次DrawScene的中途再次修改所有渲染状态
+    void UpdateSceneIV(float dt);      // smz：复原渲染状态
     void DrawScene();
 
 
@@ -40,12 +42,15 @@ private:
 private:
     ComPtr<ID3D11InputLayout> m_pVertexLayout;      // 顶点输入布局
     ComPtr<ID3D11Buffer> m_pVertexBuffer;           // 顶点缓冲区
+    ComPtr<ID3D11Buffer> m_pVertexBufferDyn;        // smz: 动态顶点缓冲区
     ComPtr<ID3D11Buffer> m_pIndexBuffer;            // 索引缓冲区
+    ComPtr<ID3D11Buffer> m_pIndexBufferDyn;         // smz: 动态顶点的索引缓冲区
     ComPtr<ID3D11Buffer> m_pConstantBuffer;         // 常量缓冲区
 
     ComPtr<ID3D11VertexShader> m_pVertexShader;     // 顶点着色器
     ComPtr<ID3D11PixelShader> m_pPixelShader;       // 像素着色器
     ConstantBuffer m_CBuffer;                       // 用于修改GPU常量缓冲区的变量
+    VertexPosColor m_VBufferDyn[3];                 // smz: 用于修改GPU顶点缓冲区的变量
 };
 
 
